@@ -52,14 +52,13 @@ class GameGrid(Frame):
                     depth = 6
                 else:
                     depth = 4
-                best = getBestMove(self.matrix, depth)
-                self.matrix, done = move(self.matrix, best)
+                grid = [row[:] for row in self.matrix]
+                self.matrix, done = move(self.matrix, getBestMove(grid, depth))
                 if done:
                     self.matrix = add_new(self.matrix)
                     self.update_grid_cells()
                 #ZAMENA ZA MAINLOOP
                 self.update()
-                #sleep(2)
             self.mainloop()
 
     def init_grid(self):

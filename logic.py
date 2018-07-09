@@ -1,15 +1,24 @@
 from random import *
 from copy import deepcopy
 from time import sleep
+from random import randint
+from math import log
 
-WEIGHT = [
+'''WEIGHT = [
         [ 6,  5,  4,  1],
         [ 5,  4,  1,  0],
         [ 4,  1,  0, -1],
         [ 1, 0, -1, -2]
+]'''
+
+WEIGHT = [
+        [ 0.135759, 0.121925, 0.102812, 0.099937],
+        [ 0.0997992, 0.0888405, 0.076711, 0.0724143],
+        [ 0.060654, 0.0562579, 0.037116, 0.0161889],
+        [ 0.0125498, 0.00992495, 0.00575871, 0.00335193]
 ]
 
-MOVES = ["up", "left", "down", "right"]
+MOVES = ["up", "right", "down", "left"]
 
 def score(mat):
     score = 0
@@ -36,8 +45,65 @@ def penalty(mat):
                     penalty += abs(mat[i][j] - mat[i-1][j])
     return penalty
 
+#def heur(mat):
+#    return score(mat) - penalty(mat)
+
 def heur(mat):
-    return score(mat) - penalty(mat) + len(get_empty_tiles(mat))*400
+    weight_1 = 11.992
+    weight_2 = 13.959
+    weight_3 = 7.05
+    weight_4 = 3.967
+    weight_5 = -0.282
+
+    state = [elem for sub in mat for elem in sub]
+    max_cell = log(max(state), 2)
+
+    free_tiles = 0.0
+    adjacent_sum = 1.0
+    adjacent_cells = 0.0
+    edges_sum = 0.0
+    # diff_adjacent_cells = 0.0
+    sum_tiles = 0.0
+    for i, coord in enumerate(state):
+        if coord == 0:
+            free_tiles += 1.0
+        else:
+            sum_tiles += coord
+            y = i // 4
+            x = i % 4
+            if x > 0 and state[(x-1) + y*4] != 0:
+                adjacent_sum += abs(log(coord, 2) - log(state[(x-1) + y*4], 2))
+                if coord == state[(x-1) + y*4]:
+                    adjacent_cells += 1.0
+                    
+            if x < 3 and state[(x+1) + y*4] != 0:
+                adjacent_sum += abs(log(coord, 2) - log(state[(x+1) + y*4], 2))
+                if coord == state[(x+1) + y*4]:
+                    adjacent_cells += 1.0
+
+            if y > 0 and state[x + (y-1)*4] != 0:
+                adjacent_sum += abs(log(coord, 2) - log(state[x + (y-1)*4], 2))
+                if coord == state[x + (y-1)*4]:
+                    adjacent_cells += 1.0
+
+            if y < 3 and state[x + (y+1)*4] != 0:
+                adjacent_sum += abs(log(coord, 2) - log(state[x + (y+1)*4], 2))
+                if coord == state[x + (y+1)*4]:
+                    adjacent_cells += 1.0
+
+    if state[0] != 0:
+        edges_sum += log(state[0], 2)
+    if state[3] != 0:
+        edges_sum += log(state[3], 2)
+    if state[12] != 0:
+        edges_sum += log(state[12], 2)
+    if state[15] != 0:
+        edges_sum += log(state[15], 2)
+    return (max_cell * weight_1) + \
+            (free_tiles * weight_2) + \
+            (adjacent_cells * weight_3) + \
+            (edges_sum * weight_4) + \
+            (adjacent_sum * weight_5)
 
 def new_game(n):
     matrix = []
@@ -55,13 +121,22 @@ def add_two(mat):
     mat[a][b]=2
     return mat
 
+def add_four(mat):
+    a=randint(0,len(mat)-1)
+    b=randint(0,len(mat)-1)
+    while(mat[a][b]!=0):
+        a=randint(0,len(mat)-1)
+        b=randint(0,len(mat)-1)
+    mat[a][b]=4
+    return mat
+
 def add_new(mat):
     a=randint(0,len(mat)-1)
     b=randint(0,len(mat)-1)
     while(mat[a][b]!=0):
         a=randint(0,len(mat)-1)
         b=randint(0,len(mat)-1)
-    mat[a][b]=choice([2, 2, 2, 2, 2, 2, 2, 2, 2, 4])
+    mat[a][b]= 2 if randint(0,100) <= 90 else 4
     return mat
 
 def game_state(mat):
@@ -93,14 +168,33 @@ def get_empty_tiles(mat):
                 retVal.append((i, j))
     return retVal
 
+def get_possible_moves(grid):
+    possible = 0
+    for m in MOVES:
+        newGrid = [row[:] for row in grid]
+
+        if grid != move(newGrid, m)[0]:
+            possible += 1
+    return possible
+
 def expectimax(grid, depth, agent):
     if depth == 0:
         return heur(grid)
     elif agent is "BOARD":
         score = 0
         empty_tiles = get_empty_tiles(grid)
-        number_of_empty = len(empty_tiles)
+        #number_of_empty = len(empty_tiles)
+        #possible = get_possible_moves(grid)
         for tile in empty_tiles:
+            newGrid = [row[:] for row in grid]
+            newGrid[tile[0]][tile[1]] = 4
+            newScore = expectimax(newGrid, depth - 1, "PLAYER")
+            if newScore == -99999:
+                score += 0
+            else:
+                score += (0.1 * newScore)
+
+
             newGrid = [row[:] for row in grid]
             newGrid[tile[0]][tile[1]] = 2
             newScore = expectimax(newGrid, depth - 1, "PLAYER")
@@ -109,26 +203,23 @@ def expectimax(grid, depth, agent):
             else:
                 score += (0.9 * newScore)
 
-            newGrid = [row[:] for row in grid]
-            newGrid[tile[0]][tile[1]] = 4
-            newScore = expectimax(newGrid, depth - 1, "PLAYER")
-            if newScore == -99999:
-                score += 0
-            else:
-                score += (0.1 * newScore)
-        if(number_of_empty == 0):
-            return heur(grid)
-        else:
-            return score/number_of_empty
+        #if(number_of_empty == 0):
+        #    return score
+        #else:
+        #    return score/number_of_empty
+        return score
     elif agent is "PLAYER":
         score = -99999
         for dir in MOVES:
             newGrid = [row[:] for row in grid]
             nextLevel = [row[:] for row in grid]
-            move(nextLevel, dir)
+            nextLevel = move(nextLevel, dir)[0]
             if newGrid == nextLevel:
                 continue
-            score = max([score, expectimax(newGrid, depth-1, "BOARD")])
+            newScore = expectimax(newGrid, depth-1, "BOARD")
+            if newScore > score:
+                score = newScore
+            #score = max([score, expectimax(newGrid, depth-1, "BOARD")])
         return score
 
 def getBestMove(grid, depth):
@@ -137,11 +228,11 @@ def getBestMove(grid, depth):
 
     for m in MOVES:
         newGrid = [row[:] for row in grid]
-        #if newGrid == move([row[:] for row in grid], m)[0]:
-        if newGrid == move(newGrid, m)[0]:
+        newGrid = move(newGrid, m)[0]
+        if grid == newGrid:
             continue
         
-        newScore = expectimax(newGrid, depth - 1, "BOARD")
+        newScore = expectimax(newGrid, depth-1, "BOARD")
 
         if newScore > score:
             bestMove = m
